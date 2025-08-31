@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SQL Practice — Inspired UI</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--glass: rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    body{font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; margin:0; background:linear-gradient(180deg,#071022 0%, #071728 100%); color:#e6eef6}
+    header{display:flex;align-items:center;gap:16px;padding:18px 24px;border-bottom:1px solid rgba(255,255,255,0.03)}
+    .logo{font-weight:700;font-size:18px;color:var(--accent)}
+    .container{display:grid;grid-template-columns:360px 1fr;gap:20px;padding:20px;max-width:1200px;margin:18px auto}
+    .sidebar{background:var(--card);padding:14px;border-radius:12px;min-height:520px}
+    .section-title{font-size:13px;color:var(--muted);margin-bottom:8px}
+    .levels{display:flex;gap:8px;margin-bottom:12px}
+    .lvl{padding:8px 10px;border-radius:8px;background:var(--glass);cursor:pointer;font-size:13px}
+    .lvl.active{background:linear-gradient(90deg, rgba(6,182,212,0.12), rgba(96,165,250,0.06));border:1px solid rgba(6,182,212,0.08)}
+    .question-list{max-height:380px;overflow:auto}
+    .question-item{padding:10px;border-radius:8px;margin-bottom:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent);cursor:pointer}
+    .question-item:hover{transform:translateY(-2px)}
+
+    .main{display:flex;flex-direction:column;gap:12px}
+    .card{background:var(--card);padding:14px;border-radius:12px}
+    .editor{height:200px;width:100%;background:#071026;border:1px solid rgba(255,255,255,0.03);border-radius:8px;padding:10px;font-family:monospace;color:#dbeafe;resize:vertical}
+    .btns{display:flex;gap:10px;margin-top:8px}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:8px;color:#e6eef6;cursor:pointer}
+    button.primary{background:linear-gradient(90deg,#06b6d4,#60a5fa);border:none;color:#04203a}
+    .hint{margin-top:10px;background:rgba(255,255,255,0.02);padding:10px;border-radius:8px;color:var(--muted)}
+    .result{margin-top:10px;overflow:auto;max-height:300px}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th,td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.03);text-align:left}
+    .meta{display:flex;gap:10px;align-items:center}
+    .small{font-size:12px;color:var(--muted)}
+    .split{display:flex;gap:12px}
+    .db-structure{font-family:monospace;background:rgba(255,255,255,0.02);padding:10px;border-radius:8px}
+
+    footer{padding:12px;text-align:center;color:var(--muted);font-size:13px}
+
+    @media(max-width:900px){.container{grid-template-columns:1fr;padding:12px}.sidebar{order:2}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">SQL Practice — Inspired</div>
+    <div class="small">Practice SQL queries on a sample Employees DB</div>
+  </header>
+  <div class="container">
+    <aside class="sidebar card">
+      <div class="section-title">Levels</div>
+      <div class="levels">
+        <div class="lvl active" data-level="easy">Easy</div>
+        <div class="lvl" data-level="medium">Medium</div>
+        <div class="lvl" data-level="hard">Hard</div>
+      </div>
+
+      <div class="section-title">Questions</div>
+      <div class="question-list" id="questionList"></div>
+
+      <div style="margin-top:12px">
+        <div class="section-title">Database</div>
+        <div class="db-structure" id="dbStructure"></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div id="qTitle" style="font-weight:700">Select a question to begin</div>
+            <div class="small" id="qMeta">Level • Easy</div>
+          </div>
+          <div class="meta">
+            <div class="small">DB: <strong>Employees (in-memory)</strong></div>
+            <div style="width:10px"></div>
+            <button id="resetDb">Reset DB</button>
+          </div>
+        </div>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)" />
+
+        <textarea id="editor" class="editor" spellcheck="false">-- write your SQL here
+SELECT * FROM Employees LIMIT 10;</textarea>
+
+        <div class="btns">
+          <button id="hintBtn">Hint</button>
+          <button id="solutionBtn">Show Solution</button>
+          <button id="runBtn" class="primary">Run ▶</button>
+          <button id="clearBtn">Clear</button>
+        </div>
+
+        <div id="hintBox" class="hint" style="display:none"></div>
+        <div id="resultBox" class="result"></div>
+      </div>
+
+      <div class="card" id="explainCard" style="display:none">
+        <div style="font-weight:700">Explanation</div>
+        <div class="small" id="explainText" style="margin-top:8px"></div>
+      </div>
+    </main>
+  </div>
+
+  <footer>This page is inspired by sql-practice.com UI but is an independent implementation for personal practice.</footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.6.2/sql-wasm.js"></script>
+  <script>
+    // Questions data (30) with hints and solutions
+    const questions = {
+      easy: [
+        {id:1, title:'Select all columns from the Employees table.', hint:'Use SELECT * FROM Employees;', solution:'SELECT * FROM Employees;'},
+        {id:2, title:'Show only first_name and salary of all employees.', hint:'SELECT first_name, salary FROM Employees;', solution:'SELECT first_name, salary FROM Employees;'},
+        {id:3, title:'Find employees who work in the IT department.', hint:"Use WHERE department = 'IT'", solution:"SELECT * FROM Employees WHERE department = 'IT';"},
+        {id:4, title:'Get a list of unique departments.', hint:'Use DISTINCT on department', solution:'SELECT DISTINCT department FROM Employees;'},
+        {id:5, title:'Show employees hired after 2018.', hint:"Compare hire_date > '2018-12-31'", solution:"SELECT * FROM Employees WHERE hire_date > '2018-12-31';"},
+        {id:6, title:'Find the employee with emp_id = 104.', hint:'Use WHERE emp_id = 104', solution:'SELECT * FROM Employees WHERE emp_id = 104;'},
+        {id:7, title:'List employees whose salary is greater than 70,000.', hint:'WHERE salary > 70000', solution:'SELECT * FROM Employees WHERE salary > 70000;'},
+        {id:8, title:'Display employees ordered by hire_date (oldest first).', hint:'ORDER BY hire_date ASC', solution:'SELECT * FROM Employees ORDER BY hire_date ASC;'},
+        {id:9, title:'Count how many employees are in the HR department.', hint:"Use COUNT(*) with WHERE department='HR'", solution:"SELECT COUNT(*) as cnt FROM Employees WHERE department='HR';"},
+        {id:10, title:"Show employees whose last name starts with 'S'.", hint:"Use LIKE 'S%'", solution:"SELECT * FROM Employees WHERE last_name LIKE 'S%';"}
+      ],
+      medium: [
+        {id:11, title:'Find the average salary of employees in the IT department.', hint:'Use AVG(salary) and GROUP or WHERE', solution:"SELECT AVG(salary) as avg_salary FROM Employees WHERE department='IT';"},
+        {id:12, title:'Show the highest and lowest salary in the company.', hint:'Use MAX and MIN', solution:"SELECT MAX(salary) as max_salary, MIN(salary) as min_salary FROM Employees;"},
+        {id:13, title:'List employees whose salary is between 60,000 and 80,000.', hint:'Use BETWEEN', solution:"SELECT * FROM Employees WHERE salary BETWEEN 60000 AND 80000;"},
+        {id:14, title:'Get the total salary paid in the Sales department.', hint:"Use SUM on salary with WHERE department='Sales'", solution:"SELECT SUM(salary) as total_sales_salary FROM Employees WHERE department='Sales';"},
+        {id:15, title:'Find employees who do not have a manager.', hint:'manager_id IS NULL', solution:"SELECT * FROM Employees WHERE manager_id IS NULL;"},
+        {id:16, title:'Show employees hired in the year 2019.', hint:"Use strftime to extract year or LIKE '2019%'", solution:"SELECT * FROM Employees WHERE hire_date LIKE '2019-%';"},
+        {id:17, title:'Get the number of employees in each department.', hint:'GROUP BY department', solution:"SELECT department, COUNT(*) as cnt FROM Employees GROUP BY department;"},
+        {id:18, title:'Find employees whose first_name has exactly 5 characters.', hint:'Use LENGTH(first_name) = 5', solution:"SELECT * FROM Employees WHERE LENGTH(first_name) = 5;"},
+        {id:19, title:'List employees who report to manager_id = 105.', hint:'WHERE manager_id = 105', solution:"SELECT * FROM Employees WHERE manager_id = 105;"},
+        {id:20, title:'Show employees ordered by salary in descending order.', hint:'ORDER BY salary DESC', solution:"SELECT * FROM Employees ORDER BY salary DESC;"}
+      ],
+      hard: [
+        {id:21, title:'Find the second highest salary in the company.', hint:'Use a subquery with MAX or LIMIT/OFFSET', solution:"SELECT DISTINCT salary FROM Employees ORDER BY salary DESC LIMIT 1 OFFSET 1;"},
+        {id:22, title:'List employees who earn more than the average salary.', hint:'Compare salary > (SELECT AVG(salary) FROM Employees)', solution:"SELECT * FROM Employees WHERE salary > (SELECT AVG(salary) FROM Employees);"},
+        {id:23, title:'Find the department with the highest average salary.', hint:'GROUP BY department and ORDER BY AVG(salary) DESC LIMIT 1', solution:"SELECT department, AVG(salary) as avg_sal FROM Employees GROUP BY department ORDER BY avg_sal DESC LIMIT 1;"},
+        {id:24, title:"Display employees along with their manager's name (self join).", hint:'Join Employees to itself ON manager_id = emp_id', solution:"SELECT e.emp_id, e.first_name || ' ' || e.last_name as employee, m.first_name || ' ' || m.last_name as manager FROM Employees e LEFT JOIN Employees m ON e.manager_id = m.emp_id;"},
+        {id:25, title:'Show the top 3 highest paid employees.', hint:'ORDER BY salary DESC LIMIT 3', solution:"SELECT * FROM Employees ORDER BY salary DESC LIMIT 3;"},
+        {id:26, title:'Find employees who joined before their manager (hire_date comparison).', hint:'Self join comparing hire_date', solution:"SELECT e.emp_id, e.first_name, e.hire_date, m.emp_id as mgr_id, m.first_name as mgr_name, m.hire_date as mgr_hire FROM Employees e JOIN Employees m ON e.manager_id = m.emp_id WHERE date(e.hire_date) < date(m.hire_date);"},
+        {id:27, title:'Get department-wise count of employees, but only for departments having more than 2 employees.', hint:'GROUP BY and HAVING COUNT(*) > 2', solution:"SELECT department, COUNT(*) as cnt FROM Employees GROUP BY department HAVING COUNT(*) > 2;"},
+        {id:28, title:"Show employees whose salary is greater than their manager's salary.", hint:'Self join and compare e.salary > m.salary', solution:"SELECT e.emp_id, e.first_name || ' ' || e.last_name as employee, e.salary, m.first_name || ' ' || m.last_name as manager, m.salary as mgr_salary FROM Employees e JOIN Employees m ON e.manager_id = m.emp_id WHERE e.salary > m.salary;"},
+        {id:29, title:'Find employees hired in the same year as ‘Emily Davis’.', hint:"Find Emily's hire_date year then match others", solution:"SELECT * FROM Employees WHERE strftime('%Y', hire_date) = (SELECT strftime('%Y', hire_date) FROM Employees WHERE first_name='Emily' AND last_name='Davis');"},
+        {id:30, title:'Show the cumulative salary (running total) of employees ordered by hire_date.', hint:'Use window functions (SQLite 3.25+ supports window functions) or correlated subquery', solution:"SELECT emp_id, first_name, salary, hire_date, SUM(salary) OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING) as running_total FROM Employees ORDER BY hire_date;"}
+      ]
+    };
+
+    // Build question list
+    function buildList(level){
+      const list = document.getElementById('questionList'); list.innerHTML='';
+      questions[level].forEach(q=>{
+        const div = document.createElement('div'); div.className='question-item'; div.dataset.id=q.id; div.dataset.level=level;
+        div.innerHTML = `<div style="font-weight:600">Q${q.id}. ${q.title}</div><div class="small">Click to load query</div>`;
+        div.addEventListener('click', ()=> loadQuestion(level,q.id));
+        list.appendChild(div);
+      })
+    }
+
+    // Setup DB with SQL.js
+    let SQL;
+    let db;
+    const createDbSQL = `
+      CREATE TABLE Employees (
+        emp_id INTEGER PRIMARY KEY,
+        first_name TEXT,
+        last_name TEXT,
+        department TEXT,
+        job_title TEXT,
+        salary INTEGER,
+        hire_date TEXT,
+        manager_id INTEGER
+      );
+    `;
+
+    const employeesRows = [
+      [101,'John','Smith','HR','HR Manager',60000,'2015-01-20',null],
+      [102,'Sarah','Johnson','IT','Software Engineer',75000,'2018-03-15',105],
+      [103,'Michael','Brown','Finance','Accountant',50000,'2017-07-10',101],
+      [104,'Emily','Davis','IT','Data Analyst',68000,'2019-11-01',105],
+      [105,'David','Wilson','IT','IT Manager',90000,'2014-06-25',null],
+      [106,'Daniel','Lee','Sales','Sales Executive',55000,'2020-05-05',107],
+      [107,'Sophia','Taylor','Sales','Sales Manager',80000,'2013-09-18',null],
+      [108,'Olivia','Harris','HR','Recruiter',48000,'2021-01-11',101],
+      [109,'James','Martin','Finance','Finance Manager',85000,'2012-04-12',null],
+      [110,'William','Clark','IT','Software Engineer',72000,'2018-08-30',105]
+    ];
+
+    function initDb(){
+      db.run(createDbSQL);
+      const stmt = db.prepare("INSERT INTO Employees VALUES (?,?,?,?,?,?,?,?);");
+      employeesRows.forEach(r=>{
+        // convert null to null
+        stmt.run(r);
+      });
+      stmt.free();
+    }
+
+    // Initialize SQL.js and DB
+    window.initSqlJs({ locateFile: filename => 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.6.2/' + filename }).then(function(SQLlib){
+      SQL = SQLlib;
+      db = new SQL.Database();
+      initDb();
+      renderDbStructure();
+      buildList('easy');
+    });
+
+    // Render db structure
+    function renderDbStructure(){
+      const el = document.getElementById('dbStructure');
+      el.innerHTML = `Employees(emp_id, first_name, last_name, department, job_title, salary, hire_date, manager_id)`;
+    }
+
+    // Load question into editor
+    function loadQuestion(level,id){
+      const q = questions[level].find(x=>x.id==id);
+      document.getElementById('qTitle').innerText = `Q${q.id}. ${q.title}`;
+      document.getElementById('qMeta').innerText = `Level • ${level.charAt(0).toUpperCase()+level.slice(1)}`;
+      document.getElementById('editor').value = q.solution; // prefill solution as starting text
+      document.getElementById('hintBox').style.display='none';
+      document.getElementById('hintBox').innerText='';
+      document.getElementById('explainCard').style.display='none';
+      // remember current
+      window.currentQuestion = {level,id};
+    }
+
+    // Buttons
+    document.getElementById('hintBtn').addEventListener('click', ()=>{
+      const cur = window.currentQuestion;
+      if(!cur){alert('Select a question first');return}
+      const q = questions[cur.level].find(x=>x.id==cur.id);
+      const hb = document.getElementById('hintBox'); hb.style.display='block'; hb.innerText = q.hint;
+    });
+    document.getElementById('solutionBtn').addEventListener('click', ()=>{
+      const cur = window.currentQuestion; if(!cur){alert('Select a question first');return}
+      const q = questions[cur.level].find(x=>x.id==cur.id);
+      document.getElementById('editor').value = q.solution;
+    });
+
+    document.getElementById('runBtn').addEventListener('click', ()=>{
+      runQuery(document.getElementById('editor').value);
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', ()=>{document.getElementById('editor').value='';document.getElementById('resultBox').innerHTML='';});
+    document.getElementById('resetDb').addEventListener('click', ()=>{db.close(); db = new SQL.Database(); initDb(); alert('In-memory DB reset');});
+
+    // run and render results
+    function runQuery(sql){
+      let out = document.getElementById('resultBox'); out.innerHTML='';
+      try{
+        const res = db.exec(sql);
+        if(res.length===0){ out.innerHTML = '<div class="small">Query executed successfully. No results to display.</div>'; return }
+        // show first result set
+        const table = document.createElement('table');
+        const header = document.createElement('tr');
+        res[0].columns.forEach(c=>{ const th = document.createElement('th'); th.innerText=c; header.appendChild(th)});
+        const thead = document.createElement('thead'); thead.appendChild(header); table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        res[0].values.forEach(row=>{
+          const tr = document.createElement('tr'); row.forEach(cell=>{ const td = document.createElement('td'); td.innerText = cell===null? 'NULL': cell; tr.appendChild(td)}); tbody.appendChild(tr)
+        });
+        table.appendChild(tbody);
+        out.appendChild(table);
+      }catch(err){
+        out.innerHTML = `<div style="color:#ffb4b4">Error: ${err.message}</div>`;
+      }
+    }
+
+    // Level toggles
+    document.querySelectorAll('.lvl').forEach(el=>el.addEventListener('click', ()=>{
+      document.querySelectorAll('.lvl').forEach(x=>x.classList.remove('active')); el.classList.add('active'); buildList(el.dataset.level);
+    }));
+
+    // load first question by default
+    window.addEventListener('load', ()=>{setTimeout(()=>{loadQuestion('easy',1)},500)});
+  </script>
+</body>
+</html>
